@@ -3,7 +3,7 @@
 Plugin Name: WooCommerce Variation Scheduler
 Plugin URI: http://estudiodusa.pro
 Description: Permite que variações de produtos no WooCommerce sejam ativadas e desativadas em datas específicas.
-Version: 0.1.7
+Version: 0.2.4
 Author: Alexandra Santos
 Author URI: http://estudiodusa.pro
 License: GPL2
@@ -47,19 +47,35 @@ function wvs_save_custom_variation_fields($variation_id, $i) {
     update_post_meta($variation_id, 'variation_end_date', $end_date);
 }
 
-// Ajustar a visibilidade e o preço das variações com base nas datas
+// Verificar as datas e ajustar a visibilidade e o preço
 add_filter('woocommerce_available_variation', 'wvs_check_variation_dates', 10, 3);
 function wvs_check_variation_dates($variation, $product, $variation_obj) {
     $start_date = get_post_meta($variation_obj->get_id(), 'variation_start_date', true);
     $end_date = get_post_meta($variation_obj->get_id(), 'variation_end_date', true);
-    $price_html = $variation_obj->get_price_html();
+    $current_date = date('Y-m-d');
 
-    // Adicionar apenas o preço da variação se a variação tiver datas definidas
-    if (!empty($start_date) && !empty($end_date)) {
-        $variation['variation_description'] .= '<p class="price">' . $price_html . '</p>';
+    // Exibir variações apenas se ambas as datas forem definidas
+    if (empty($start_date) || empty($end_date)) {
+        return $variation; // Exibe a variação se uma das datas não estiver definida
     }
 
-    return $variation; // Exibe todas as variações com as datas definidas
+    // Certificar que a variação está dentro do intervalo de datas
+    if ($current_date >= $start_date && $current_date <= $end_date) {
+        // Adicionar mensagem de preço
+        $locale = get_locale();
+        $local_text = ($locale === 'es_ES') ? 'Precio' : 'Valor';
+        $variation['variation_description'] .= '<p class="price-valor">' . $local_text . ' ' . $variation_obj->get_price_html() . '</p>';
+        
+        return $variation; // Exibe a variação dentro das datas
+    }
+
+    // Definir a variação como indisponível fora das datas
+    $variation['is_in_stock'] = false;
+    $localeIndisponivel = get_locale();
+    $local_text_indisponivel = ($localeIndisponivel === 'es_ES') ? 'Disponible pronto.' : 'Disponível em breve.';
+    $variation['availability_html'] = __($local_text_indisponivel, 'woocommerce');
+    
+    return $variation; // Exibe a variação com a mensagem de indisponível
 }
 
 // Atualizar o cache de preços das variações
@@ -74,5 +90,11 @@ add_filter('woocommerce_variation_prices', 'wvs_force_recalculate_variation_pric
 function wvs_force_recalculate_variation_prices($prices, $product) {
     $product->get_children(); // Força o recálculo
     return $prices;
+}
+
+// Enfileirar o arquivo de estilo
+add_action('wp_enqueue_scripts', 'wvs_enqueue_styles');
+function wvs_enqueue_styles() {
+    wp_enqueue_style('wvs-style', plugins_url('style.css', __FILE__));
 }
 ?>
